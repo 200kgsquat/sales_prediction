@@ -24,8 +24,7 @@ def filter_invalid_dates(sales):
 
 
 def remove_duplicates(sales):
-    logging.info("Dropping duplicates & aggregating sales per day")
-    sales = sales.drop_duplicates(subset=["shop_id", "item_id", "date"])
+    logging.info("Aggregating sales per day (shop, item, date)")
     return sales.groupby(
         ["shop_id", "item_id", "date"], as_index=False
     ).agg(
@@ -35,13 +34,16 @@ def remove_duplicates(sales):
 
 
 def handle_missing(sales):
-    logging.info("Filling missing item_cnt_day using linear interpolation")
-    sales["item_cnt_day"] = sales.groupby(["shop_id", "item_id"])["item_cnt_day"]\
-                                 .transform(lambda x: x.interpolate(method="linear").fillna(0))
+    logging.info("Filling missing item_cnt_day with 0 (assume no sales)")
+    sales["item_cnt_day"] = sales["item_cnt_day"].fillna(0)
 
-    logging.info("Filling missing item_price using forward/backward fill per item")
+    missing_prices = sales["item_price"].isna().sum()
+    if missing_prices > 0:
+        logging.warning(f"Found {missing_prices} missing item_price values — applying ffill + median fallback")
+    
     sales["item_price"] = sales.groupby("item_id")["item_price"]\
-                               .transform(lambda x: x.ffill().bfill().fillna(0))
+                               .transform(lambda x: x.ffill().fillna(x.median()))
+
     return sales
 
 
@@ -51,29 +53,6 @@ def clip_outliers(sales):
     low_pr, high_pr = sales["item_price"].quantile([0.01, 0.99])
     sales["item_cnt_day"] = sales["item_cnt_day"].clip(lower=low_cnt, upper=high_cnt)
     sales["item_price"] = sales["item_price"].clip(lower=low_pr, upper=high_pr)
-    return sales
-
-
-def merge_metadata(sales, items, cats, shops):
-    logging.info("Merging item/shop metadata")
-    sales = sales.merge(
-        items[["item_id", "item_category_id"]], on="item_id", how="left"
-    )
-    sales = sales.merge(
-        cats[["item_category_id", "item_category_name"]],
-        on="item_category_id", how="left"
-    )
-    sales = sales.merge(
-        shops[["shop_id", "shop_name"]], on="shop_id", how="left"
-    )
-    return sales
-
-
-def compute_date_block_num(sales):
-    logging.info("Computing date_block_num from date")
-    sales["date_block_num"] = (
-        (sales["date"].dt.year - 2013) * 12 + (sales["date"].dt.month - 1)
-    )
     return sales
 
 
@@ -89,15 +68,6 @@ def expand_monthly_grid(sales):
     return monthly
 
 
-def add_lag_features(df):
-    logging.info("Generating lag features")
-    df = df.sort_values(["shop_id", "item_id", "month"])
-    grp = df.groupby(["shop_id", "item_id"])["item_cnt_day"]
-    df["sales_prev_month"] = grp.shift(1).fillna(0)
-    df["sales_prev_2_months"] = grp.shift(2).fillna(0)
-    return df
-
-
 def validate_final(df):
     logging.info("Validating output DataFrame")
     if df.empty:
@@ -110,7 +80,13 @@ def validate_final(df):
 
 def save_output(df, path):
     logging.info(f"Saving cleaned data to {path}")
-    df.to_csv(path, index=False)
+    if path.endswith(".parquet"):
+        df.to_parquet(path, index=False)
+    elif path.endswith(".pkl") or path.endswith(".pickle"):
+        df.to_pickle(path)
+    else:
+        df.to_csv(path, index=False)
+        logging.warning("Saved as CSV — consider using .parquet or .pkl for efficiency")
 
 
 def run_pipeline(args):
@@ -123,11 +99,7 @@ def run_pipeline(args):
     sales = remove_duplicates(sales)
     sales = handle_missing(sales)
     sales = clip_outliers(sales)
-    sales = merge_metadata(sales, items, cats, shops)
-    sales = compute_date_block_num(sales)
     sales = expand_monthly_grid(sales)
-    sales = merge_metadata(sales, items, cats, shops)
-    sales = add_lag_features(sales)
 
     validate_final(sales)
     save_output(sales, args.output)
