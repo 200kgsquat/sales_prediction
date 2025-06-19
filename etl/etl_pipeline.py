@@ -33,16 +33,21 @@ def remove_duplicates(sales):
     )
 
 
-def handle_missing(sales):
-    logging.info("Filling missing item_cnt_day with 0 (assume no sales)")
-    sales["item_cnt_day"] = sales["item_cnt_day"].fillna(0)
-
+def handle_missing(sales, report_path=None):
+    missing_cnt = sales["item_cnt_day"].isna().sum()
     missing_prices = sales["item_price"].isna().sum()
-    if missing_prices > 0:
-        logging.warning(f"Found {missing_prices} missing item_price values — applying ffill + median fallback")
-    
-    sales["item_price"] = sales.groupby("item_id")["item_price"]\
-                               .transform(lambda x: x.ffill().fillna(x.median()))
+    logging.info(f"Found {missing_cnt} missing values in 'item_cnt_day'")
+    logging.info(f"Found {missing_prices} missing values in 'item_price'")
+
+    total_missing = missing_cnt + missing_prices
+    if total_missing == 0:
+        logging.info("No missing values detected.")
+    else:
+        logging.warning("Missing values detected — no imputation applied.")
+        if report_path:
+            logging.info(f"Saving rows with missing values to {report_path}")
+            missing_rows = sales[sales["item_cnt_day"].isna() | sales["item_price"].isna()]
+            missing_rows.to_csv(report_path, index=False)
 
     return sales
 
@@ -54,18 +59,6 @@ def clip_outliers(sales):
     sales["item_cnt_day"] = sales["item_cnt_day"].clip(lower=low_cnt, upper=high_cnt)
     sales["item_price"] = sales["item_price"].clip(lower=low_pr, upper=high_pr)
     return sales
-
-
-def expand_monthly_grid(sales):
-    logging.info("Expanding only real (shop_id, item_id, month) combinations")
-    sales["month"] = sales["date"].dt.to_period("M")
-    monthly = sales.groupby(["shop_id", "item_id", "month"], as_index=False).agg({
-        "item_cnt_day": "sum",
-        "item_price": "mean"
-    })
-    monthly["item_cnt_day"] = monthly["item_cnt_day"].fillna(0)
-    monthly["item_price"] = monthly["item_price"].fillna(0)
-    return monthly
 
 
 def validate_final(df):
@@ -99,7 +92,6 @@ def run_pipeline(args):
     sales = remove_duplicates(sales)
     sales = handle_missing(sales)
     sales = clip_outliers(sales)
-    sales = expand_monthly_grid(sales)
 
     validate_final(sales)
     save_output(sales, args.output)
