@@ -13,24 +13,33 @@ def load_data(sales_path, items_path, categories_path, shops_path, test_path=Non
     return sales, items, cats, shops, test
 
 
-def remove_invalid_rows(sales):
+def remove_negative_values(sales):
     logging.info("Removing rows with negative item_cnt_day or item_price")
-    return sales[(sales["item_price"] >= 0)]
+    before = len(sales)
+    sales = sales[(sales["item_cnt_day"] >= 0) & (sales["item_price"] >= 0)]
+    after = len(sales)
+    logging.info(f"Removed {before - after} rows with negative values")
+    return sales
 
 
-def filter_invalid_dates(sales):
-    logging.info("Filtering dates outside 2013-2015 range")
-    return sales[(sales["date"].dt.year >= 2013) & (sales["date"].dt.year <= 2015)]
-
-
-def remove_duplicates(sales):
-    logging.info("Aggregating sales per day (shop, item, date)")
-    return sales.groupby(
+def merge_duplicate_shops(sales):
+    logging.info("Merging duplicate shops by reassigning shop_id")
+    shop_mapping = {0: 57, 1: 58, 10: 11, 39: 40}
+    sales["shop_id"] = sales["shop_id"].replace(shop_mapping)
+    # Re-aggregate if merging caused duplicates
+    sales = sales.groupby(
         ["shop_id", "item_id", "date"], as_index=False
     ).agg(
         item_cnt_day=("item_cnt_day", "sum"),
         item_price=("item_price", "mean")
     )
+    logging.info("Duplicate shops merged and aggregated")
+    return sales
+
+
+def filter_invalid_dates(sales):
+    logging.info("Filtering dates outside 2013-2015 range")
+    return sales[(sales["date"].dt.year >= 2013) & (sales["date"].dt.year <= 2015)]
 
 
 def handle_missing(sales, report_path=None):
@@ -65,7 +74,7 @@ def validate_final(df):
     logging.info("Validating output DataFrame")
     if df.empty:
         raise RuntimeError("Resulting dataset is empty!")
-    expected = {"shop_id", "item_id", "month", "item_cnt_day", "item_price"}
+    expected = {"shop_id", "item_id", "date", "item_cnt_day", "item_price"}
     missing = expected - set(df.columns)
     if missing:
         raise ValueError(f"Missing columns after ETL: {missing}")
@@ -87,9 +96,9 @@ def run_pipeline(args):
         args.sales, args.items, args.categories, args.shops, args.test
     )
 
-    sales = remove_invalid_rows(sales)
+    sales = remove_negative_values(sales)
+    sales = merge_duplicate_shops(sales)
     sales = filter_invalid_dates(sales)
-    sales = remove_duplicates(sales)
     sales = handle_missing(sales)
     sales = clip_outliers(sales)
 
