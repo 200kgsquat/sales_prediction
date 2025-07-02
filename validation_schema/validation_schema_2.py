@@ -11,8 +11,9 @@ features_schema = DataFrameSchema({
     "item_id": Column(pa.Int),
 
     "item_price": Column(pa.Float, checks=Check.ge(0)),
+    "item_cnt_day": Column(pa.Float, checks=Check.ge(0)),
     "item_cnt_month": Column(pa.Float, checks=Check.ge(0)),
-    "log_item_cnt_day": Column(pa.Float, nullable=True),
+    "log_item_cnt_month": Column(pa.Float, nullable=True),
 
     "item_name": Column(pa.String),
     "item_category_id": Column(pa.Int),
