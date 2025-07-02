@@ -1,136 +1,81 @@
-import sys
 import pandas as pd
-import numpy as np
-import pandera as pa
-from pandera import DataFrameSchema, Column, Check
-from pandera.errors import SchemaError
+import pandera.pandas as pa
+from pandera.pandas import Column, DataFrameSchema, Check
+from pandera.errors import SchemaErrors
 
-# --- 1. Validation Function with Pandera after Feature Engineering ---
-def validate_after_fe(
-    df: pd.DataFrame,
-    required_cols=None,
-    max_nan_ratio: float = 0.01
-) -> pd.DataFrame:
-    """
-    Validates a DataFrame after feature engineering using Pandera.
+# Define validation schema with your actual column names
+features_schema = DataFrameSchema({
+    "date": Column(pa.DateTime),
+    "date_block_num": Column(pa.Int, checks=Check.ge(0)),
+    "shop_id": Column(pa.Int),
+    "item_id": Column(pa.Int),
 
-    - Ensures required columns exist and contain no NaNs.
-    - Allows up to `max_nan_ratio` NaNs in non-required columns.
-    - Checks for duplicates on key columns.
-    - Verifies integer types for key columns and numeric + positive for prices.
-    - Flags infinite values in numeric columns.
+    "item_price": Column(pa.Float, checks=Check.ge(0)),
+    "item_cnt_month": Column(pa.Float, checks=Check.ge(0)),
+    "log_item_cnt_day": Column(pa.Float, nullable=True),
 
-    Raises:
-        ValueError: on any validation failure, with details of failure cases.
-    Returns:
-        The validated (and coerced) DataFrame.
-    """
-    # Default required columns
-    if required_cols is None:
-        required_cols = ['date_block_num', 'shop_id', 'item_id', 'item_cnt_day', 'item_price']
+    "item_name": Column(pa.String),
+    "item_category_id": Column(pa.Int),
+    "item_category_name": Column(pa.String),
+    "shop_name": Column(pa.String),
+    "city": Column(pa.String),
 
-    # 1. Pre-check for missing required columns
-    missing = [c for c in required_cols if c not in df.columns]
-    if missing:
-        raise ValueError(f"Missing columns: {missing}")
+    "month": Column(pa.Int, checks=Check.in_range(1, 12)),
+    "year": Column(pa.Int),
+    "season": Column(pa.String),  
+    "month_sin": Column(pa.Float, checks=Check.in_range(-1, 1)),
+    "month_cos": Column(pa.Float, checks=Check.in_range(-1, 1)),
 
-    # 2. Build schema columns dynamically
-    col_defs = {}
-    for col in df.columns:
-        # Determine base dtype
-        if col in ['date_block_num', 'shop_id', 'item_id']:
-            dtype = pa.Int
-            nullable = False
-            checks = [Check(lambda s: s.dropna().apply(float.is_integer).all(),
-                            element_wise=False,
-                            error=f"Column '{col}' must contain only integers")]  # series-level
-        elif col == 'item_cnt_day':
-            dtype = pa.Float
-            nullable = False
-            checks = [
-                Check(lambda s: s >= 0, element_wise=True, error="item_cnt_day must be >= 0")
-            ]
-        elif col == 'item_price':
-            dtype = pa.Float
-            nullable = False
-            checks = [
-                Check(lambda s: s > 0, element_wise=True, error="item_price must be > 0")
-            ]
-        else:
-            # For other columns, infer dtype and allow NaNs up to ratio
-            if pd.api.types.is_integer_dtype(df[col].dropna()):
-                dtype = pa.Int
-            elif pd.api.types.is_float_dtype(df[col].dropna()):
-                dtype = pa.Float
-            else:
-                dtype = pa.String
-            nullable = True
-            checks = [
-                Check(
-                    lambda s: s.isna().mean() <= max_nan_ratio,
-                    element_wise=False,
-                    error=f"Column '{col}' has too many missing values (> {max_nan_ratio * 100:.2f}% NaNs)"
-                )
-            ]
-        col_defs[col] = Column(
-            dtype,
-            checks=checks,
-            nullable=nullable,
-            coerce=True
-        )
+    "lag_1": Column(pa.Float, nullable=True),
+    "lag_2": Column(pa.Float, nullable=True),
+    "lag_12": Column(pa.Float, nullable=True),
 
-    # 3. Table-level checks
-    table_checks = []
-    # Duplicates check
-    table_checks.append(
-        Check(
-            lambda df: ~df.duplicated(subset=['date_block_num', 'shop_id', 'item_id']).any(),
-            element_wise=False,
-            error="duplicate rows for (date_block_num, shop_id, item_id)"
-        )
-    )
-    # Infinite values check
-    table_checks.append(
-        Check(
-            lambda df: not np.isinf(df.select_dtypes(include=[np.number]).values).any(),
-            element_wise=False,
-            error="infinite values detected in numeric columns"
-        )
-    )
+    "rolling_3_median": Column(pa.Float, nullable=True),
+    "rolling_6_median": Column(pa.Float, nullable=True),
 
-    schema = DataFrameSchema(
-        columns=col_defs,
-        checks=table_checks,
-        name="AfterFEValidation"
-    )
+    "item_avg_sales_month": Column(pa.Float),
+    "shop_item_avg": Column(pa.Float),
 
-    # 4. Validate
+    "price_increasing": Column(pa.Int),
+
+    "item_min_price": Column(pa.Float),
+    "item_max_price": Column(pa.Float),
+    "price_range": Column(pa.Float, checks=Check.ge(0)),
+
+    "type_of_shop": Column(pa.String, nullable=True),
+})
+
+def validate_dataset(df: pd.DataFrame, dataset_name="incoming") -> bool:
     try:
-        validated = schema.validate(df, lazy=True)
-        print("Validation passed!")
-        return validated
-    except SchemaError as e:
-        # Collect failure cases
-        cases = e.failure_cases.to_dict(orient='records')
-        raise ValueError(f"Validation errors: {cases}")
+        features_schema.validate(df, lazy=True)
+        print(f"[✅ SUCCESS] {dataset_name} dataset passed validation.")
+        return True
+    except SchemaErrors as e:
+        print(f"[❌ ERROR] {dataset_name} dataset failed validation.")
+        print("🔍 Validation errors:")
+        print(e.failure_cases)
+        return False
+# 🔹 Entry point for standalone script use
 
-# --- CLI Interface ---
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python validate_fe.py path_to_dataset.csv [max_nan_ratio]")
-        sys.exit(1)
-
-    path = sys.argv[1]
-    max_nan = float(sys.argv[2]) if len(sys.argv) > 2 else 0.01
+    path = "datasets/fe_df.csv"
 
     try:
-        data = pd.read_csv(path)
+        # Load dataset
+        df = pd.read_csv(path)
+        # Ensure 'date' column is parsed correctly
+        df["date"] = pd.to_datetime(df["date"])
+
+        # Run validation
+        is_valid = validate_dataset(df, dataset_name="future_data")
+
+        if not is_valid:
+            raise ValueError("Validation failed — pipeline halted.")
+
+        # Proceed with feature generation or modeling
+        print("🎯 Dataset is valid. Proceeding to the next stage.")
+
     except FileNotFoundError:
-        print(f"File not found: {path}")
-        sys.exit(1)
-
-    try:
-        validate_after_fe(data, max_nan_ratio=max_nan)
-    except ValueError as e:
-        print(e)
-        sys.exit(1)
+        print(f"[⚠️] File not found: {path}")
+    except Exception as e:
+        print(f"[❗] Unexpected error occurred: {e}")
