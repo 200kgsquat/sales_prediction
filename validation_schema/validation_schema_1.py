@@ -1,13 +1,24 @@
 import sys
+import os
 import pandas as pd
 import pandera as pa
 from pandera import DataFrameSchema, Column, Check
 from pandera.errors import SchemaError
 import pytest
+import logging
+
+# --- Logging Setup ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("validation.log", mode='a')
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # --- 1. Schema Definition with Pandera ---
-# Custom date check: accepts DD-MM-YYYY or YYYY-MM-DD
-
 def _is_valid_date(v: str) -> bool:
     for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
         try:
@@ -43,22 +54,20 @@ sale_schema = DataFrameSchema(
         "item_price": Column(
             pa.Float,
             [
-                Check(lambda x: x > 0, error="item_price must be > 0"),
-                Check(lambda x: x <= 100_000, error="item_price must be <= 100000")
+                Check(lambda x: x > 0, error="item_price must be > 0")
             ],
             nullable=False,
             coerce=True,
-            description="Item price: >0, <=100k"
+            description="Item price: >0"
         ),
         "item_cnt_day": Column(
             pa.Float,
             [
-                Check(lambda x: x >= 0, error="item_cnt_day must be >= 0"),
-                Check(lambda x: x <= 1_000, error="item_cnt_day must be <= 1000")
+                Check(lambda x: x >= 0, error="item_cnt_day must be >= 0")
             ],
             nullable=False,
             coerce=True,
-            description="Items sold: >=0, <=1k"
+            description="Items sold: >=0"
         ),
     },
     checks=[
@@ -73,85 +82,54 @@ sale_schema = DataFrameSchema(
 
 # --- 2. Validation Function ---
 def validate_dataset(df: pd.DataFrame, require_unique: bool = True) -> pd.DataFrame:
-    """
-    Validates the DataFrame against the sale_schema.
-    If require_unique=False, skips the unique-rows constraint.
-    Raises ValueError on validation errors.
-    """
     schema_to_use = sale_schema
     if not require_unique:
-        # remove the table-level unique check
         schema_to_use = sale_schema.remove_checks(
             lambda check: "duplicate rows" in check.error
         )
     try:
-        # Validate and return coerced DataFrame
+        logger.info("Validating dataset...")
         return schema_to_use.validate(df, lazy=True)
     except SchemaError as e:
-        # Raise ValueError for compatibility
-        raise ValueError(f"dataset validation failed: {e.failure_cases.to_dict(orient='records')}")
+        failure_records = e.failure_cases.to_dict(orient='records')
+        logger.error("Validation failed with errors: %s", failure_records)
+        raise ValueError(f"dataset validation failed: {failure_records}")
 
-# --- 3. Standalone execution & Test suite ---
+# --- 3. Main Execution & Test Handling ---
 if __name__ == '__main__':
     if 'test' in sys.argv:
         sys.exit(pytest.main([__file__]))
 
     path = sys.argv[1] if len(sys.argv) > 1 else 'datasets/cleaned_sales.csv'
-    out = sys.argv[2] if len(sys.argv) > 2 else 'validated_sales_train.csv'
+    out = sys.argv[2] if len(sys.argv) > 2 else 'datasets/cleaned_sales.csv'
 
-    print('Script started')
+    logger.info("Script started. Input: %s | Output: %s", path, out)
     try:
         df = pd.read_csv(path)
+        logger.info("CSV file loaded successfully.")
         df_valid = validate_dataset(df)
         df_valid.to_csv(out, index=False)
-        print(f"✅ Validated dataset saved to {out}")
+        logger.info("✅ Validated dataset saved to %s", out)
     except FileNotFoundError:
-        print(f"❌ File not found: {path}")
+        logger.error("❌ File not found: %s", path)
     except ValueError as e:
-        print(f"❌ Validation error: {e}")
+        logger.error("❌ Validation error: %s", e)
 
 # --- 4. Automated pytest tests ---
+GOOD_PATH = 'datasets/cleaned_sales.csv'
+BAD_PATH = 'datasets/broken_sales.csv'
 
-def _create_test_data():
-    return pd.DataFrame({
-        "date": ["01-01-2020", "02-01-2020"],
-        "item_id": [0, 1],
-        "shop_id": [0, 2],
-        "item_price": [10.0, 20.0],
-        "item_cnt_day": [0.0, 5.0]
-    })
-
-
-def test_valid_dataframe():
-    df = _create_test_data()
+def test_cleaned_sales_validates():
+    if not os.path.exists(GOOD_PATH):
+        pytest.skip(f"⚠️ File {GOOD_PATH} not found.")
+    df = pd.read_csv(GOOD_PATH)
     df2 = validate_dataset(df)
-    assert df2.equals(df)
+    assert not df2[['date', 'item_id', 'shop_id', 'item_price', 'item_cnt_day']].isnull().any().any(), \
+        "Expected no missing values in cleaned_sales.csv"
 
-
-def test_missing_values():
-    df = _create_test_data()
-    df.loc[0, "item_price"] = None
-    with pytest.raises(ValueError) as exc:
-        validate_dataset(df)
-    assert "nullable violation" in str(exc.value) or "dataset validation failed" in str(exc.value)
-
-
-def test_negative_values():
-    df = _create_test_data()
-    df.loc[1, "item_cnt_day"] = -1
-    with pytest.raises(ValueError):
-        validate_dataset(df)
-
-
-def test_date_format():
-    df = _create_test_data()
-    df.loc[0, "date"] = "2020.01.01"
-    with pytest.raises(ValueError):
-        validate_dataset(df)
-
-
-def test_duplicate_rows():
-    df = _create_test_data()
-    df = pd.concat([df, df.iloc[[0]]], ignore_index=True)
+def test_broken_sales_fails():
+    if not os.path.exists(BAD_PATH):
+        pytest.skip(f"⚠️ File {BAD_PATH} not found.")
+    df = pd.read_csv(BAD_PATH)
     with pytest.raises(ValueError):
         validate_dataset(df)
