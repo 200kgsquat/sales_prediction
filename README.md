@@ -7,31 +7,44 @@ This repository contains a feature engineering pipeline for a retail sales predi
 ## Directory Structure
 
 ```text
-├── datasets/               # Raw and intermediate datasets
-│   ├── sales_train.csv     # Raw daily sales data
-│   ├── cleaned_sales.csv   # Validated sales data
-│   ├── items.csv           # Item metadata
-│   ├── item_categories.csv # Item category metadata
-│   ├── shops.csv           # Shop metadata
-│   ├── test_template.csv   # (shop_id, item_id) for test period
-│   ├── test.csv            # Final test set for prediction
-│   ├── sample_submission.csv
-│   └── fe_df.csv           # Output of feature engineering
+├── data/                              # All project data
+│   ├── raw/                           # Raw input files
+│   │   ├── sales_train.csv
+│   │   ├── items.csv
+│   │   ├── item_categories.csv
+│   │   └── shops.csv
+│   ├── interim/                       # Cleaned and intermediate data
+│   │   ├── cleaned_sales.csv          # After ETL
+│   │   ├── checkpoint.pkl
+│   │   └── downcasted.pkl
+│   ├── processed/                     # Final datasets
+│   │   └── fe_df.csv
+│   └── external/                      # Test and submission files
+│       ├── test.csv
+│       └── sample_submission.csv
 │
-├── validation/             # Data validation scripts and tests
-│   ├── validate_raw.py     # Pandera schema and validation for raw sales
-│   └── test_validate_raw.py# pytest tests for raw validation
-│   ├── validate_features.py# Pandera schema for feature set validation
+├── src/                               # Source code
+│   ├── etl/
+│   │   └── etl_pipeline.py            # raw → cleaned
+│   ├── fe_pipeline/
+│   │   └── fe_pipeline.py             # Feature engineering logic
+│   └── validation/
+│       ├── schemas/                  
+│       │   ├── validation_schema_1.py
+│       │   ├── validation_schema_2.py
+│       │   └── __init__.py
+│       └── validator/
+|           └── validator.py
+│      
 │
-├── pipeline/               # Feature engineering pipeline scripts
-│   └── fe_pipeline.py      # Aggregation and feature-building functions
+├── notebooks/
+|   ├── DQC_and_ETL.ipynb
+|   ├── EDA.ipynb
+│   ├── feature_engineering.ipynb
+│   └── modeling.ipynb
 │
-├── notebooks/              # Exploratory notebook and ad-hoc scripts
-│   └── feature_expansion.py # Script for expanding monthly grid and initial FE
-│
-├── checkpoint.pkl          # Intermediate pickled DataFrame
-├── downcasted.pkl          # Pickled DF with optimized dtypes
-└── README.md               # Project documentation
+├── README.md
+└── requirements.txt
 ```
 
 ---
