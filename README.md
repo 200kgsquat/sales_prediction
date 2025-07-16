@@ -4,45 +4,49 @@
 This repository contains a feature engineering pipeline for retail sales prediction. The pipeline processes raw daily sales data, validates input, generates monthly aggregated features, validates the output, and prepares data for modeling.
 
 ## Updated Directory Structure
-├── datasets/ # Data directories
-│ ├── raw/ # Raw input files
-│ │ ├── sales_train.csv
-│ │ ├── items.csv
-│ │ ├── item_categories.csv
-│ │ └── shops.csv
-│ ├── interim/ # Processed intermediate data
-│ │ ├── cleaned_sales.csv
-│ │ ├── checkpoint.pkl
-│ │ └── downcasted.pkl
-│ ├── processed/ # Final output
-│ │ └── fe_df.csv
-│ └── external/ # Test data
-│ ├── test.csv
-│ └── sample_submission.csv
+## Updated Directory Structure
+
+```text
+├── datasets/                        # Data directories
+│   ├── raw/                         # Raw input files
+│   │   ├── sales_train.csv
+│   │   ├── items.csv
+│   │   ├── item_categories.csv
+│   │   └── shops.csv
+│   ├── interim/                     # Processed intermediate data
+│   │   ├── cleaned_sales.csv
+│   │   ├── checkpoint.pkl
+│   │   └── downcasted.pkl
+│   ├── processed/                   # Final output
+│   │   └── fe_df.csv
+│   └── external/                    # Test data
+│       ├── test.csv
+│       └── sample_submission.csv
 │
 ├── src/
-│ ├── sales_forecasting/ # Core pipeline code
-│ │ ├── data/ # ETL components
-│ │ │ └── etl_pipeline.py
-│ │ ├── feature/ # Feature engineering
-│ │ │ └── fe_pipeline.py
-│ │ └── validation/ # Validation logic
-│ │ ├── schemas/
-│ │ │ ├── validation_schema_1.py
-│ │ │ ├── validation_schema_2.py
-│ │ │ └── init.py
-│ │ └── validator.py
-│ │
-│ └── scripts/ # Execution scripts
-│ └── run_pipeline.py # Main pipeline runner
+│   ├── sales_forecasting/           # Core pipeline code
+│   │   ├── data/                    # ETL components
+│   │   │   └── etl_pipeline.py
+│   │   ├── feature/                 # Feature engineering
+│   │   │   └── fe_pipeline.py
+│   │   └── validation/              # Validation logic
+│   │       ├── schemas/
+│   │       │   ├── validation_schema_1.py
+│   │       │   ├── validation_schema_2.py
+│   │       │   └── __init__.py
+│   │       └── validator.py
 │
-├── notebooks/ # Jupyter notebooks
-│ ├── DQC_and_ETL.ipynb # Data quality checks
-│ ├── EDA.ipynb # Exploratory analysis
-│ └── feature_engineering.ipynb # Feature development
+│   └── scripts/                     # Execution scripts
+│       └── run_pipeline.py          # Main pipeline runner
 │
-├── README.md # This file
-└── requirements.txt # Python dependencies
+├── notebooks/                       # Jupyter notebooks
+│   ├── DQC_and_ETL.ipynb            # Data quality checks
+│   ├── EDA.ipynb                    # Exploratory analysis
+│   └── feature_engineering.ipynb    # Feature development
+│
+├── README.md                        # This file
+└── requirements.txt                 # Python dependencies
+```
 
 
 ## Key Components
