@@ -1,184 +1,110 @@
-**Project Overview**
+# Retail Sales Forecasting - Feature Engineering Pipeline
 
-This repository contains a feature engineering pipeline for a retail sales prediction project. The goal is to process raw daily sales data, validate it, generate monthly aggregated features, validate the feature set, and prepare it for modeling and prediction.
+## Project Overview
+This repository contains a feature engineering pipeline for retail sales prediction. The pipeline processes raw daily sales data, validates input, generates monthly aggregated features, validates the output, and prepares data for modeling.
 
----
-
-## Directory Structure
-
-```text
-├── data/                              # All project data
-│   ├── raw/                           # Raw input files
-│   │   ├── sales_train.csv
-│   │   ├── items.csv
-│   │   ├── item_categories.csv
-│   │   └── shops.csv
-│   ├── interim/                       # Cleaned and intermediate data
-│   │   ├── cleaned_sales.csv          # After ETL
-│   │   ├── checkpoint.pkl
-│   │   └── downcasted.pkl
-│   ├── processed/                     # Final datasets
-│   │   └── fe_df.csv
-│   └── external/                      # Test and submission files
-│       ├── test.csv
-│       └── sample_submission.csv
+## Updated Directory Structure
+├── datasets/ # Data directories
+│ ├── raw/ # Raw input files
+│ │ ├── sales_train.csv
+│ │ ├── items.csv
+│ │ ├── item_categories.csv
+│ │ └── shops.csv
+│ ├── interim/ # Processed intermediate data
+│ │ ├── cleaned_sales.csv
+│ │ ├── checkpoint.pkl
+│ │ └── downcasted.pkl
+│ ├── processed/ # Final output
+│ │ └── fe_df.csv
+│ └── external/ # Test data
+│ ├── test.csv
+│ └── sample_submission.csv
 │
-├── src/                               # Source code
-│   ├── etl/
-│   │   └── etl_pipeline.py            # raw → cleaned
-│   ├── fe_pipeline/
-│   │   └── fe_pipeline.py             # Feature engineering logic
-│   └── validation/
-│       ├── schemas/                  
-│       │   ├── validation_schema_1.py
-│       │   ├── validation_schema_2.py
-│       │   └── __init__.py
-│       └── validator/
-|           └── validator.py
-│      
+├── src/
+│ ├── sales_forecasting/ # Core pipeline code
+│ │ ├── data/ # ETL components
+│ │ │ └── etl_pipeline.py
+│ │ ├── feature/ # Feature engineering
+│ │ │ └── fe_pipeline.py
+│ │ └── validation/ # Validation logic
+│ │ ├── schemas/
+│ │ │ ├── validation_schema_1.py
+│ │ │ ├── validation_schema_2.py
+│ │ │ └── init.py
+│ │ └── validator.py
+│ │
+│ └── scripts/ # Execution scripts
+│ └── run_pipeline.py # Main pipeline runner
 │
-├── notebooks/
-|   ├── DQC_and_ETL.ipynb
-|   ├── EDA.ipynb
-│   ├── feature_engineering.ipynb
-│   └── modeling.ipynb
+├── notebooks/ # Jupyter notebooks
+│ ├── DQC_and_ETL.ipynb # Data quality checks
+│ ├── EDA.ipynb # Exploratory analysis
+│ └── feature_engineering.ipynb # Feature development
 │
-├── README.md
-└── requirements.txt
-```
+├── README.md # This file
+└── requirements.txt # Python dependencies
 
----
 
-## Getting Started
+## Key Components
 
-### Prerequisites
+### 1. Data Processing (`src/data/etl_pipeline.py`)
+- Cleans and preprocesses raw sales data
+- Handles missing values and data type conversions
+- Outputs cleaned data to `data/interim/`
 
-* Python 3.8 or higher
-* Recommended to use a virtual environment (e.g., `venv` or `conda`)
+### 2. Feature Engineering (`src/feature/fe_pipeline.py`)
+- Aggregates daily sales to monthly level
+- Generates features:
+  - Lag features (1-12 month lags)
+  - Rolling statistics (3-12 month windows)
+  - Price features (avg, min, max)
+  - Shop/item metadata merges
+  - Temporal features (month, year)
+- Outputs final feature set to `data/processed/fe_df.csv`
 
-Install required packages:
+### 3. Data Validation (`src/validation/validation_schemas/validation.py`)
+- Schema validation using Pandera
+- Raw data validation:
+  - Date format consistency
+  - Non-negative prices/quantities
+  - ID validity checks
+- Feature set validation:
+  - Range checks for numerical features
+  - Category validations
+  - Missing value checks
 
-```bash
-pip install -r requirements.txt
-```
+### 4. Pipeline Runner (`src/scripts/run_pipeline.py`)
+- Orchestrates full workflow:
+  1. Run ETL pipeline
+  2. Validate input for feature engineering
+  3. Execute feature engineering
+  4. Validate outputs
+- Example usage:
+  ```bash
+  python src/scripts/run_pipeline.py
 
-**Key dependencies:**
+Getting Started
+Prerequisites
+Python 3.8+
 
-* `pandas`, `numpy` — core data manipulation
-* `pandera` — DataFrame schema validation
-* `pytest` — Automated testing
-* `logging` — Pipeline logging
+Dependencies: pip install -r requirements.txt
 
----
+Key Dependencies
+pandas
+numpy
+pandera
+scikit-learn
+python-dateutil
+Running Pipeline
+bash
+# Run full pipeline:
+python src/scripts/run_pipeline.py
 
-## Data Validation
+# Run individual components:
+python src/sales_forecasting/data/etl_pipeline.py
+python src/sales_forecasting/feature/fe_pipeline.py
+Pipeline Consistency	Input/output shape validation	fe_pipeline.py
+Contributing
+Create feature branch: git checkout -b feature/new-feature
 
-### 1. Raw Sales Validation
-
-Script: `validation/validate_raw.py`
-
-* Defines `SaleRecordSchema` using Pandera to enforce:
-
-  * Valid date formats (DD-MM-YYYY or YYYY-MM-DD)
-  * Non-negative IDs and prices
-  * No duplicate `(date, item_id, shop_id)` rows
-
-Run validation:
-
-```bash
-python validation/validate_raw.py datasets/sales_train.csv datasets/cleaned_sales.csv
-```
-
-Automated tests with pytest:
-
-```bash
-pytest validation/test_validate_raw.py
-```
-
-### 2. Feature Set Validation
-
-Script: `validation/validate_features.py`
-
-* Defines `features_schema` using Pandera to enforce types, ranges, and uniqueness on the engineered feature set.
-
-Run validation:
-
-```bash
-python validation/validate_features.py
-```
-
----
-
-## Feature Engineering Pipeline
-
-Script: `pipeline/fe_pipeline.py`
-
-1. **Load data** from CSVs
-2. **Aggregate** daily sales into monthly counts (`aggregate_monthly`)
-3. **Build features** (`build_test_features`):
-
-   * Merge item/shop metadata
-   * Compute seasonal, cyclic, lag, rolling, and price features
-   * Encode city and shop type
-4. **Validate** the generated features using `validate_dataset`
-5. **Save** the final feature set to `datasets/fe_df.csv`
-
-Run the pipeline:
-
-```bash
-python pipeline/fe_pipeline.py \
-  datasets/sales_train.csv \
-  datasets/items.csv \
-  datasets/item_categories.csv \
-  datasets/shops.csv \
-  datasets/test_template.csv \
-  datasets/fe_df.csv \
-  --test_block_num 34
-```
-
----
-
-## Exploratory Expansion Script
-
-File: `notebooks/feature_expansion.py`
-
-* Demonstrates an alternative interactive approach:
-
-  * Merges daily sales with metadata
-  * Expands full monthly grid with `pd.MultiIndex`
-  * Fills missing prices and sales
-  * Engineers features step-by-step (lags, rolling stats, cyclic encoding, extras)
-  * Downcasts dtypes to optimize memory
-  * Saves checkpoints (`checkpoint.pkl`, `downcasted.pkl`)
-
-To run:
-
-```bash
-python notebooks/feature_expansion.py
-```
-
----
-
-## Logging and Monitoring
-
-* Logging is configured via `logging` module in each script.
-* Raw validation logs to `validation.log`.
-* Pipeline logs to STDOUT and records info/critical errors.
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/name`
-3. Commit your changes: \`git commit -m "Add new feature"
-4. Push to the branch: `git push origin feature/name`
-5. Submit a pull request
-
-Please ensure all tests pass before merging.
-
----
-
-## License
-
-MIT License. See `LICENSE` file for details.
+Add tests for new functionality

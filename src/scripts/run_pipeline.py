@@ -4,12 +4,10 @@ import time
 import logging
 from pathlib import Path
 
-# Установка путей для импортов - должна быть ПЕРЕД всеми импортами проекта
 current_script_dir = Path(__file__).parent.absolute()
 src_dir = current_script_dir.parent  
 project_root = src_dir.parent        
 
-# Добавляем src и корень проекта в sys.path
 sys.path.insert(0, str(src_dir))
 sys.path.insert(0, str(project_root))
 
@@ -52,7 +50,7 @@ def run_pipeline(sales_path, items_path, categories_path, shops_path, output_pat
     try:
         # 1. ETL Process
         logger.info("Running ETL pipeline")
-        from data.etl_pipeline import ETLPipeline
+        from sales_forecasting.data.etl_pipeline import ETLPipeline
         etl = ETLPipeline(
             sales_path=str(sales_path),
             items_path=str(items_path),
@@ -65,26 +63,27 @@ def run_pipeline(sales_path, items_path, categories_path, shops_path, output_pat
         
         # 2. Validate cleaned data
         logger.info("Validating cleaned sales data")
-        from feature.validator import Validator
-        from feature.validation_schema_1 import sale_schema
-        
-        validator = Validator(sale_schema)
-        cleaned_sales_validated = validator.validate(df_cleaned, "CleanedSalesData")
+        from sales_forecasting.validation.validator import Validator
+        from sales_forecasting.validation.validation_schemas.validation_schema_1 import sale_schema
+
+        validator = Validator()
+        cleaned_sales_validated = validator.validate(df_cleaned, sale_schema, "CleanedSalesData")
+
         logger.info(f"Cleaned data validated. Shape: {cleaned_sales_validated.shape}")
         
         # 3. Feature Engineering
         logger.info("Running feature engineering")
-        from feature.fe_pipeline import FeaturePipeline
+        from sales_forecasting.feature.fe_pipeline import FeaturePipeline
         fe_pipeline = FeaturePipeline(etl.items, etl.categories, etl.shops)
         df_features = fe_pipeline.transform(cleaned_sales_validated)
         logger.info(f"Feature engineering completed. Shape: {df_features.shape}")
         
         # 4. Validate final features
         logger.info("Validating final features")
-        from feature.validation_schema_2 import features_schema
-        
-        validator = Validator(features_schema)
-        df_features_validated = validator.validate(df_features, "FinalFeatures")
+        from sales_forecasting.validation.validation_schemas.validation_schema_2 import features_schema
+
+        validator = Validator()
+        df_features_validated = validator.validate(df_features, features_schema, "FinalFeatures")
         logger.info(f"Final features validated. Shape: {df_features_validated.shape}")
         
         # 5. Save results
