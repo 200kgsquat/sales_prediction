@@ -18,7 +18,7 @@ This repository contains a feature engineering pipeline for retail sales predict
 │   │   ├── checkpoint.pkl
 │   │   └── downcasted.pkl
 │   ├── processed/                   # Final output
-│   │   └── fe_df.csv
+│   │   └── fe_df.parquet
 │   └── external/                    # Test data
 │       ├── test.csv
 │       └── sample_submission.csv
