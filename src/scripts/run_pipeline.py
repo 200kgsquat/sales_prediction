@@ -11,7 +11,6 @@ project_root = src_dir.parent
 sys.path.insert(0, str(src_dir))
 sys.path.insert(0, str(project_root))
 
-# logger
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -30,20 +29,21 @@ def setup_paths():
         items_path = base_path / 'items.csv'
         categories_path = base_path / 'item_categories.csv'
         shops_path = base_path / 'shops.csv'
-        output_path = project_root / 'data/features.parquet'
+        output_path = project_root / 'datasets/processed/features.parquet' 
+        model_path = project_root / 'models/lgb_model.pkl'
         
         # Verify paths
         for path in [sales_path, items_path, categories_path, shops_path]:
             if not path.exists():
                 raise FileNotFoundError(f"Input file not found: {path}")
         
-        return sales_path, items_path, categories_path, shops_path, output_path
+        return sales_path, items_path, categories_path, shops_path, output_path, model_path
     except Exception as e:
         logger.error(f"Path configuration failed: {str(e)}")
         sys.exit(1)
 
-def run_pipeline(sales_path, items_path, categories_path, shops_path, output_path) -> int:
-    """Run the complete data pipeline."""
+def run_pipeline(sales_path, items_path, categories_path, shops_path, output_path, model_path) -> int:
+    """Run the complete data pipeline and train the model."""
     logger.info("Starting pipeline")
     start_time = time.time()
     
@@ -68,7 +68,6 @@ def run_pipeline(sales_path, items_path, categories_path, shops_path, output_pat
 
         validator = Validator()
         cleaned_sales_validated = validator.validate(df_cleaned, sale_schema, "CleanedSalesData")
-
         logger.info(f"Cleaned data validated. Shape: {cleaned_sales_validated.shape}")
         
         # 3. Feature Engineering
@@ -82,20 +81,32 @@ def run_pipeline(sales_path, items_path, categories_path, shops_path, output_pat
         logger.info("Validating final features")
         from sales_forecasting.validation.validation_schemas.validation_schema_2 import features_schema
 
-        validator = Validator()
         df_features_validated = validator.validate(df_features, features_schema, "FinalFeatures")
         logger.info(f"Final features validated. Shape: {df_features_validated.shape}")
         
-        # 5. Save results
+        # 5. Save features
         logger.info(f"Saving features to {output_path}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df_features_validated.to_parquet(output_path, index=False)
         
+        # 6. Train model
+        logger.info("Train model")
+        from sales_forecasting.modeling.trainer import SalesPredictor
+
+        trainer = SalesPredictor(model_path=str(model_path))
+        trainer.train(df_features_validated)
+
+        # 7. Inference
+        logger.info("Starting inference")
+        from src.sales_forecasting.modeling.tester import run_inference_pipeline
+        run_inference_pipeline()
+
         elapsed = time.time() - start_time
-        logger.info(f"Pipeline completed successfully in {elapsed:.2f} seconds")
+        logger.info(f"Pipeline ended in {elapsed:.2f} sec")
         return 0
+
     except Exception as e:
-        logger.exception(f"Pipeline failed: {str(e)}")
+        logger.exception(f"Error in pipeline: {str(e)}")
         return 1
 
 if __name__ == "__main__":
