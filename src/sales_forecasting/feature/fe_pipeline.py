@@ -18,19 +18,9 @@ class FeaturePipeline:
         logger.info("FeaturePipeline initialized")
 
     def _preprocess_reference_data(self):
-        self.shops['city'] = self.shops['shop_name'].str.split().str[0].fillna('unknown')
-        self.shops['type_of_shop'] = self.shops['shop_name'].str.split().str[1].fillna('unknown')
+        self.shops['shop_name'] = self.shops['shop_name'].str.lower().str.strip()
         self.items['item_name'] = self.items['item_name'].str.lower().str.strip()
         self.item_categories['item_category_name'] = self.item_categories['item_category_name'].str.lower().str.strip()
-
-    @staticmethod
-    def get_season(month: int) -> str:
-        return (
-            'winter' if month in [12, 1, 2] else
-            'spring' if month in [3, 4, 5] else
-            'summer' if month in [6, 7, 8] else
-            'autumn'
-        )
 
     @staticmethod
     def downcast(df: pd.DataFrame) -> pd.DataFrame:
@@ -51,11 +41,12 @@ class FeaturePipeline:
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         logger.info(f"Starting feature engineering. Input shape: {df.shape}")
 
-        # Fill raw missing
         df['item_cnt_day'] = df['item_cnt_day'].fillna(0)
         df['item_price'] = df['item_price'].fillna(0)
 
-        # Monthly aggregation
+        df['item_cnt_day'] = df['item_cnt_day'].clip(*df['item_cnt_day'].quantile([0.01, 0.99]))
+        df['item_price'] = df['item_price'].clip(*df['item_price'].quantile([0.01, 0.99]))
+
         monthly_sales = df.groupby(['date_block_num', 'shop_id', 'item_id']).agg(
             item_cnt_month=('item_cnt_day', 'sum'),
             item_price=('item_price', 'mean')
@@ -72,31 +63,22 @@ class FeaturePipeline:
             grid['date_block_num'] = block
 
             grid = grid.merge(current_sales, on=['date_block_num', 'shop_id', 'item_id'], how='left')
-
-            # Fill missing aggregated
             grid['item_cnt_month'] = grid['item_cnt_month'].fillna(0)
             grid['item_price'] = grid['item_price'].fillna(0)
 
-            # Merge metadata
             grid = grid.merge(self.items, on='item_id', how='left')
             grid = grid.merge(self.item_categories, on='item_category_id', how='left')
-            grid = grid.merge(self.shops, on='shop_id', how='left')
 
-            # Temporal features
             month = (block % 12) + 1
-            grid['season'] = self.get_season(month)
-            grid['month_sin'] = np.sin(2 * np.pi * month / 12)
             grid['month_cos'] = np.cos(2 * np.pi * month / 12)
 
             batches.append(grid)
 
         full_df = pd.concat(batches, ignore_index=True)
 
-        # Lags
-        full_df = self._add_lags(full_df, ['shop_id', 'item_id'], 'item_cnt_month', [1, 2, 3, 12])
+        full_df = self._add_lags(full_df, ['shop_id', 'item_id'], 'item_cnt_month', [1, 2])
         full_df = self._add_lags(full_df, ['shop_id', 'item_id'], 'item_price', [1])
 
-        # Rolling medians
         for window in [3, 6]:
             col = f'rolling_median_{window}'
             full_df[col] = (
@@ -104,7 +86,6 @@ class FeaturePipeline:
                 .transform(lambda x: x.shift(1).rolling(window).median())
             )
 
-        # Averages & logs
         full_df['item_avg_sales_month_lag1'] = (
             full_df.groupby('item_id')['item_cnt_month']
             .transform(lambda x: x.shift(1).mean())
@@ -115,20 +96,14 @@ class FeaturePipeline:
         )
         full_df['log_item_cnt_month_lag_1'] = np.log1p(full_df['item_cnt_month_lag_1'])
 
-        # Price change
         full_df['price_change'] = full_df['item_price'] - full_df['item_price_lag_1']
         full_df['price_increasing'] = (full_df['price_change'] > 0)
 
-        # Price stats
-        price_stats = full_df.groupby('item_id')['item_price'].agg(
-            item_min_price='min', item_max_price='max'
-        ).reset_index()
-        full_df = full_df.merge(price_stats, on='item_id', how='left')
-        full_df['price_range'] = full_df['item_max_price'] - full_df['item_min_price']
+        # Удаляем ненужные текстовые признаки
+        full_df = full_df.drop(columns=['item_name', 'item_category_name'], errors='ignore')
 
-        # Fill all lag-related NaNs with 0
         lag_cols = [
-            'item_cnt_month_lag_1', 'item_cnt_month_lag_2', 'item_cnt_month_lag_3', 'item_cnt_month_lag_12',
+            'item_cnt_month_lag_1', 'item_cnt_month_lag_2',
             'rolling_median_3', 'rolling_median_6',
             'item_avg_sales_month_lag1', 'shop_item_avg_lag1', 'log_item_cnt_month_lag_1',
             'item_price_lag_1', 'price_change'

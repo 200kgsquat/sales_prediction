@@ -96,14 +96,6 @@ def run_pipeline(sales_path, items_path, categories_path, shops_path, output_pat
         trainer = SalesPredictor(model_path=str(model_path))
         trainer.train(df_features_validated)
 
-        # 7. Inference
-        logger.info("Starting inference")
-        from src.sales_forecasting.modeling.tester import run_inference_pipeline
-        run_inference_pipeline()
-
-        elapsed = time.time() - start_time
-        logger.info(f"Pipeline ended in {elapsed:.2f} sec")
-        return 0
 
     except Exception as e:
         logger.exception(f"Error in pipeline: {str(e)}")
