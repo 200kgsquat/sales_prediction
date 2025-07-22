@@ -1,2 +1,4 @@
 ﻿cleaned_sales.csv
 datasets/
+__pycache__/
+/datasets
