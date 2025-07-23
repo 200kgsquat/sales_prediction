@@ -3,11 +3,7 @@ import numpy as np
 import logging
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+
 
 class FeaturePipeline:
     def __init__(self, items: pd.DataFrame, item_categories: pd.DataFrame, shops: pd.DataFrame):
