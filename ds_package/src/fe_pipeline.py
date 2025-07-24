@@ -4,7 +4,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class FeaturePipeline:
     def __init__(self, items: pd.DataFrame, item_categories: pd.DataFrame, shops: pd.DataFrame):
         self.items = items.copy()
