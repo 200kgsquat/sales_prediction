@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from pathlib import Path
 
-from src.utils.logger import get_logger
+from src.sales_forecasting.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

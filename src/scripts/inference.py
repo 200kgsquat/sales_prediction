@@ -2,15 +2,15 @@ import sys
 import pandas as pd
 from pathlib import Path
 from sales_forecasting.modeling.trainer import SalesPredictor
-from src.utils.logger import get_logger
+from sales_forecasting.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 current_script_dir = Path(__file__).parent.absolute()
 project_root = current_script_dir.parent.parent  # .../sales_predict/src
 
 sys.path.insert(0, str(project_root / "src"))
 sys.path.insert(0, str(project_root))
-
-logger = get_logger(__name__)
 
 
 def run_inference_pipeline() -> pd.DataFrame:

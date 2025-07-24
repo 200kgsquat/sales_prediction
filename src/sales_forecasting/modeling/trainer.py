@@ -7,7 +7,7 @@ import lightgbm as lgb
 from pathlib import Path
 from typing import Optional
 
-from src.utils.logger import get_logger
+from sales_forecasting.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

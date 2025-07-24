@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "kaggle_comp_future_sales_forecasting"
 version = "0.1.1"
@@ -24,6 +28,14 @@ keywords = ["sales", "forecasting", "machine-learning", "kaggle"]
 [project.urls]
 Homepage = "https://github.com/200kgsquat/sales_prediction"
 
-[build-system]
-requires = ["setuptools >= 77.0.3"]
-build-backend = "setuptools.build_meta"
+# Specify where to find the package files
+[tool.hatch.build.targets.wheel]
+packages = ["src/sales_forecasting"]
+
+[dependency-groups]
+dev = [
+    "build>=1.2.2.post1",
+    "setuptools>=80.9.0",
+    "twine>=6.1.0",
+    "wheel>=0.45.1",
+]
