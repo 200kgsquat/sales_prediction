@@ -19,6 +19,7 @@ dependencies = [
     "pandera>=0.10.0",
     "tqdm==4.67.1",
     "joblib==1.5.1",
+    "lightgbm>=3.3.0",
     "xgboost >= 1.6.2",
     "pyarrow<=20.0.0",
     "typing-inspect>=0.6.0"

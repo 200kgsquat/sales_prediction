@@ -1,4 +1,5 @@
 import sys
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from sales_forecasting.modeling.trainer import SalesPredictor
@@ -17,11 +18,11 @@ def run_inference_pipeline() -> pd.DataFrame:
     logger.info("Starting inference pipeline")
     try:
         paths = {
-            "features_path": project_root.parent / "datasets/processed/features.parquet",
-            "test_features_path": project_root.parent / "notebooks/test.parquet",
-            "test_ids_path": project_root.parent / "datasets/external/test.csv",
-            "model_path": project_root.parent / "models/lgb_model.pkl",
-            "submission_path": project_root.parent / "datasets/external/predictions.parquet",
+            "features_path": project_root / "datasets/processed/features.parquet",
+            "test_features_path": project_root / "notebooks/test.parquet",
+            "test_ids_path": project_root / "datasets/external/test.csv",
+            "model_path": project_root / "models/lgb_model.pkl",
+            "submission_path": project_root / "datasets/external/predictions.csv",
         }
 
         logger.info(f"Loading full features from {paths['features_path']}")
@@ -36,22 +37,20 @@ def run_inference_pipeline() -> pd.DataFrame:
             logger.info("Dropping target column from test features")
             test_df.drop(columns=["target"], inplace=True)
 
-        logger.info(f"Loading test IDs from {paths['test_ids_path']}")
-        test_ids = pd.read_csv(paths["test_ids_path"])
-
         logger.info(f"Loading model from {paths['model_path']}")
         model = SalesPredictor(model_path=str(paths["model_path"]))
-
         y_pred = model.predict(test_df)
 
-        submission = test_ids.copy()
-        submission["item_cnt_month"] = y_pred.clip(0, 20)
+        df = pd.DataFrame({
+            "ID": np.arange(len(y_pred)),
+            "item_cnt_month": y_pred.clip(0, 20)
+        })
 
         logger.info(f"Saving predictions to {paths['submission_path']}")
-        submission.to_parquet(paths["submission_path"], index=False)
+        df.to_csv(paths["submission_path"], index=False)
 
         logger.info("Inference pipeline completed successfully")
-        return submission
+        return df
 
     except Exception as e:
         logger.exception(f"Inference pipeline failed: {e}")

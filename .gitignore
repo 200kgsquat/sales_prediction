@@ -3,3 +3,10 @@ datasets/
 __pycache__/
 /datasets
 /ds_package
+/wandb
+*log
+*cbm
+*csv
+*tsv
+*pkl
+*parquet
