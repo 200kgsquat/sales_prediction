@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kaggle-comp-future-sales-forecasting"
+version = "0.1.4"
+description = "Project for future sales prediction, data preprocessing, and model training"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+  { name = "Pavel", email = "Pashayyur@gmail.com" }
+]
+dependencies = [
+    "scikit-learn>=1.2,<1.8",
+    "pandas>=1.5,<2.3",
+    "numpy>=1.21,<2.3",
+    "pandera>=0.10.0",
+    "tqdm==4.67.1",
+    "joblib==1.5.1",
+    "lightgbm>=3.3.0",
+    "xgboost>=1.6.2",
+    "pyarrow<=20.0.0",
+    "typing-inspect>=0.6.0"
+]
+keywords = ["sales", "forecasting", "machine-learning", "kaggle"]
+
+[project.urls]
+Homepage = "https://github.com/200kgsquat/sales_prediction"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sales_forecasting"]

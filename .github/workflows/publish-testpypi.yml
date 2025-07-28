@@ -1,0 +1,51 @@
+name: Publish to TestPyPI
+
+on:
+  push:
+    branches:
+      - dev
+      - modeling
+    paths:
+      - 'pyproject.toml'
+      - 'src/**'
+      - '.github/workflows/publish-testpypi.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        pip install build twine tomlkit
+
+    - name: Bump version (patch)
+      run: python src/scripts/bump_version.py
+
+    - name: Commit bumped version
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add pyproject.toml
+        git commit -m "ci: bump patch version"
+        git push
+
+    - name: Build the package
+      run: python -m build
+
+    - name: Publish to Test PyPI
+      env:
+        TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+      run: twine upload --repository-url https://test.pypi.org/legacy/ dist/*

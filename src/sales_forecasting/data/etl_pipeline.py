@@ -1,20 +1,19 @@
-import logging
-import pandas as pd
 from pathlib import Path
 from typing import Optional
+import pandas as pd
+from sales_forecasting.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
 
 class ETLPipeline:
-    """ETL pipeline for sales data processing."""
-
     def __init__(
         self,
         sales_path: str,
         items_path: str,
         categories_path: str,
         shops_path: str,
-        output_path: Optional[str] = None
+        output_path: Optional[str] = None,
     ):
         self.sales_path = Path(sales_path)
         self.items_path = Path(items_path)
@@ -31,26 +30,27 @@ class ETLPipeline:
         logger.info("ETLPipeline initialized")
 
     def _load_data(self):
-        """Load all input data files."""
         logger.info("Loading input data")
-
         for path in [self.sales_path, self.items_path, self.categories_path, self.shops_path]:
             if not path.exists():
-                raise FileNotFoundError(f"Input file not found: {path}")
+                raise FileNotFoundError(f"Missing input file: {path}")
 
         self.sales = pd.read_csv(self.sales_path)
         self.items = pd.read_csv(self.items_path)
         self.categories = pd.read_csv(self.categories_path)
         self.shops = pd.read_csv(self.shops_path)
 
-        logger.info("Data loaded")
+        initial_len = len(self.sales)
+        self.sales = self.sales[
+            (self.sales['item_price'] >= 0) &
+            (self.sales['item_cnt_day'] >= 0)
+        ]
+        logger.info(f"Sales loaded: {initial_len} rows -> {len(self.sales)} after filtering negatives")
 
-    def _clean_and_transform_sales_data(self):
-        """Validate, clean and transform sales data."""
-        logger.info("Cleaning and transforming sales data")
-
-        # Fix duplicate shop_ids
-        shop_id_mapping = {
+    def _validate_and_clean_sales(self):
+        logger.info("Validating and cleaning sales data")
+        
+         shop_id_mapping = {
             0: 57,
             1: 58,
             10: 11,
@@ -58,60 +58,44 @@ class ETLPipeline:
         }
         self.sales['shop_id'] = self.sales['shop_id'].replace(shop_id_mapping)
 
-        # Convert date
-        self.sales['date'] = pd.to_datetime(
-            self.sales['date'],
-            dayfirst=True,
-            errors='coerce'
-        )
-
+        self.sales['date'] = pd.to_datetime(self.sales['date'], dayfirst=True, errors='coerce')
         if self.sales['date'].isna().any():
-            bad_dates = self.sales[self.sales['date'].isna()]
-            logger.error(f"Invalid dates found: {bad_dates[['date']].head()}")
-            raise ValueError(f"Invalid dates found: {bad_dates.shape[0]} rows")
+            bad_rows = self.sales[self.sales['date'].isna()]
+            logger.error(f"Invalid dates found:\n{bad_rows[['date']].head()}")
+            raise ValueError(f"Invalid dates: {len(bad_rows)} rows")
 
-        # Numeric conversion
         for col in ['item_id', 'shop_id', 'date_block_num']:
             self.sales[col] = pd.to_numeric(self.sales[col], errors='coerce', downcast='integer')
             if self.sales[col].isna().any():
-                bad_values = self.sales[self.sales[col].isna()][[col]].head()
-                logger.error(f"Invalid values in {col}: {bad_values}")
-                raise ValueError(f"Invalid values in column {col}")
+                bad_rows = self.sales[self.sales[col].isna()]
+                logger.error(f"Invalid {col} values:\n{bad_rows[[col]].head()}")
+                raise ValueError(f"Invalid values in {col}")
 
-        # Remove duplicates
-        initial_count = len(self.sales)
-        self.sales = self.sales.drop_duplicates(subset=['date', 'item_id', 'shop_id'])
-        dup_count = initial_count - len(self.sales)
-        if dup_count > 0:
-            logger.warning(f"Removed {dup_count} duplicate rows")
+        before = len(self.sales)
+        self.sales.drop_duplicates(subset=['date', 'item_id', 'shop_id'], inplace=True)
+        logger.info(f"Dropped {before - len(self.sales)} duplicate rows")
 
-        # Remove negative values
-        before_filter = len(self.sales)
+        before = len(self.sales)
         self.sales = self.sales[
             (self.sales['item_price'] >= 0) &
             (self.sales['item_cnt_day'] >= 0)
         ]
-        filtered_count = before_filter - len(self.sales)
-        if filtered_count > 0:
-            logger.warning(f"Removed {filtered_count} rows with negative prices or item counts")
+        logger.info(f"Dropped {before - len(self.sales)} rows with negative values")
 
-        # Filter by date range
         self.sales = self.sales[self.sales['date'].dt.year.between(2013, 2015)]
-
-        # Fill NaNs
-        self.sales['item_cnt_day'] = self.sales['item_cnt_day'].fillna(0)
-        self.sales['item_price'] = self.sales['item_price'].fillna(0)
-
-        # Clip outliers
+        logger.info(f"Data restricted to years 2013–2015: {self.sales.shape}")
         self.sales['item_cnt_day'] = self.sales['item_cnt_day'].clip(
-            *self.sales['item_cnt_day'].quantile([0.01, 0.99])
+        *self.sales['item_cnt_day'].quantile([0.01, 0.99])
         )
         self.sales['item_price'] = self.sales['item_price'].clip(
-            *self.sales['item_price'].quantile([0.01, 0.99])
+        *self.sales['item_price'].quantile([0.01, 0.99])
         )
+        logger.info("Clipped outliers in item_cnt_day and item_price to 1st–99th percentiles")
 
-        # Transform (aggregation)
-        self.df_transformed = self.sales.groupby(
+    def _clean_and_transform(self):
+        logger.info("Aggregating and transforming data")
+
+        grouped = self.sales.groupby(
             ['date', 'shop_id', 'item_id', 'date_block_num'],
             as_index=False
         ).agg({
@@ -119,15 +103,28 @@ class ETLPipeline:
             'item_price': 'mean'
         })
 
-        logger.info(f"Sales data cleaned and transformed. Shape: {self.df_transformed.shape}")
+        neg_rows = grouped[grouped['item_cnt_day'] < 0]
+        if not neg_rows.empty:
+            logger.warning(f"Removing {len(neg_rows)} negative item_cnt_day rows post-aggregation")
+            grouped = grouped[grouped['item_cnt_day'] >= 0]
+
+        self.df_transformed = grouped
+        logger.info(f"Transformation complete: {grouped.shape}")
 
     def run(self):
-        """Run complete ETL pipeline."""
-        logger.info("Starting ETL pipeline")
+        logger.info("Running full ETL pipeline")
         try:
             self._load_data()
-            self._clean_and_transform_sales_data()
+            self._validate_and_clean_sales()
+            self._clean_and_transform()
+
+            if self.df_transformed['item_cnt_day'].lt(0).any():
+                count = self.df_transformed['item_cnt_day'].lt(0).sum()
+                logger.warning(f"Final cleanup: removing {count} rows with negative item_cnt_day")
+                self.df_transformed = self.df_transformed[self.df_transformed['item_cnt_day'] >= 0]
+
             logger.info("ETL pipeline completed successfully")
+
         except Exception as e:
-            logger.error(f"ETL pipeline failed: {str(e)}")
+            logger.exception(f"ETL pipeline failed: {e}")
             raise
