@@ -9,7 +9,6 @@ doc = tomlkit.parse(pyproject_text)
 version_str = doc["project"]["version"]
 major, minor, patch = map(int, version_str.split("."))
 
-# You can change the logic here: e.g. only patch bump
 patch += 1
 new_version = f"{major}.{minor}.{patch}"
 doc["project"]["version"] = new_version

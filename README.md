@@ -35,7 +35,7 @@ sales_prediction/                   # Project root
 │   │   ├── feature/                # Feature engineering
 │   │   │   └── fe_pipeline.py
 │   │   ├── modeling/               # Model training and inference
-│   │   │   └── trainer.py
+│   │   │   └── model.py
 │   │   ├── validation/             # Data validation
 │   │   │   ├── validator.py
 │   │   │   └── validation_schemas/
@@ -44,17 +44,23 @@ sales_prediction/                   # Project root
 │   │   └── utils/                  # Utility modules
 │   │       └── logger.py
 │   └── scripts/                    # Command-line runners
-│       ├── run_pipeline.py        # Full pipeline execution
-│       └── run_inference.py       # Inference runner
+│       ├── train.py        # Train pipeline execution
+│       └── inference.py       # Inference runner
 │
 ├── notebooks/                      # Jupyter notebooks
 │   ├── DQC_and_ETL.ipynb           # Data quality checks & ETL
 │   ├── EDA.ipynb                   # Exploratory data analysis
-│   └── feature_engineering.ipynb   # Feature development
+│   ├── feature_engineering.ipynb   # Feature development
+│   └── modeling.ipynb              # Try different models    
 │
-├── LICENSE                         # MIT License
-├── README.md                       # This file
-└── requirements.txt                # Package dependencies
+├──docs/                            # Detailed documentation
+│  ├── eda.md
+│  ├── etl.md
+│  ├── feature_engineering.md
+│  └── modeling.md
+│
+├── pyproject.toml
+└── README.md                       
 ```
 
 ---
@@ -73,7 +79,7 @@ sales_prediction/                   # Project root
    * Generates:
 
      * Lag features (1–12 months)
-     * Rolling statistics (3–12 month windows)
+     * Rolling statistics (3–6 month windows)
      * Price-based features (average, min, max)
      * Temporal features (month, year)
    * Saves final features to `datasets/processed/`
@@ -88,7 +94,7 @@ sales_prediction/                   # Project root
 
 4. **Model Training & Inference** (`kaggle_comp_future_sales_forecasting.modeling.trainer.SalesPredictor`)
 
-   * Trains LightGBM or XGBoost models on engineered features
+   * Trains LightGBM model on engineered features
    * Saves trained model to `models/lgb_model.pkl`
    * Inference runner loads model and generates submission files
 
@@ -104,7 +110,9 @@ sales_prediction/                   # Project root
 ### From PyPI
 
 ```bash
-pip install kaggle_comp_future_sales_forecasting
+pip install --index-url https://test.pypi.org/simple/ \
+    --extra-index-url https://pypi.org/simple \
+    kaggle_comp_future_sales_forecasting
 ```
 
 ### From Source
@@ -128,21 +136,13 @@ from kaggle_comp_future_sales_forecasting import (
     sale_schema,
     features_schema
 )
-
-# 1. Run full pipeline and train model
-paths = ETLPipeline.setup_paths()
-ETLPipeline.run_pipeline(*paths)
-
-# 2. Run inference
-from kaggle_comp_future_sales_forecasting.scripts.run_inference import run_inference_pipeline
-submission_df = run_inference_pipeline()
 ```
 
 ---
 
 ## Dependencies
 
-See `requirements.txt`. Key requirements:
+See `pyproject.toml`. Key requirements:
 
 * Python >= 3.9
 * pandas
@@ -164,11 +164,3 @@ See `requirements.txt`. Key requirements:
 3. Commit your changes
 4. Push to the branch: `git push origin feature/your-feature`
 5. Open a Pull Request
-
-Please include tests and update documentation accordingly.
-
----
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

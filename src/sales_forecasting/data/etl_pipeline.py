@@ -76,7 +76,14 @@ class ETLPipeline:
 
         self.sales = self.sales[self.sales['date'].dt.year.between(2013, 2015)]
         logger.info(f"Data restricted to years 2013–2015: {self.sales.shape}")
-
+        self.sales['item_cnt_day'] = self.sales['item_cnt_day'].clip(
+        *self.sales['item_cnt_day'].quantile([0.01, 0.99])
+        )
+        self.sales['item_price'] = self.sales['item_price'].clip(
+        *self.sales['item_price'].quantile([0.01, 0.99])
+        )
+        logger.info("Clipped outliers in item_cnt_day and item_price to 1st–99th percentiles")
+        
     def _clean_and_transform(self):
         logger.info("Aggregating and transforming data")
 
