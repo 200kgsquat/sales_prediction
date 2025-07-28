@@ -49,6 +49,14 @@ class ETLPipeline:
 
     def _validate_and_clean_sales(self):
         logger.info("Validating and cleaning sales data")
+        
+         shop_id_mapping = {
+            0: 57,
+            1: 58,
+            10: 11,
+            39: 40
+        }
+        self.sales['shop_id'] = self.sales['shop_id'].replace(shop_id_mapping)
 
         self.sales['date'] = pd.to_datetime(self.sales['date'], dayfirst=True, errors='coerce')
         if self.sales['date'].isna().any():
@@ -83,7 +91,7 @@ class ETLPipeline:
         *self.sales['item_price'].quantile([0.01, 0.99])
         )
         logger.info("Clipped outliers in item_cnt_day and item_price to 1st–99th percentiles")
-        
+
     def _clean_and_transform(self):
         logger.info("Aggregating and transforming data")
 
